@@ -1,15 +1,16 @@
-const UserTopicProficiency = require('../models/UserTopicProficiency');
+const { UserTopicProficiency } = require('../models');
 
 class PathAgentService {
   static async calculateNextBestTopic(userId) {
     try {
-      const proficiencies = await UserTopicProficiency.find({ userId });
+      const proficiencies = await UserTopicProficiency.findAll({ where: { userId } });
       
       if (!proficiencies || proficiencies.length === 0) {
         return { action: "CONTINUE_NORMAL_PATH", message: "Mari mulai belajar dari topik dasar!" };
       }
 
       // Sort by mastery score (ascending for weakest, descending for strongest)
+      // Since Sequelize model instances are returned, we map to get plain values or read property directly
       const sortedProficiencies = [...proficiencies].sort((a, b) => a.masteryScore - b.masteryScore);
       const weakestTopic = sortedProficiencies[0];
       const strongestTopic = sortedProficiencies[sortedProficiencies.length - 1];

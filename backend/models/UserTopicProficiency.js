@@ -1,22 +1,68 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const userTopicProficiencySchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  topicId: { type: String, required: true },
-  topicName: { type: String, required: true },
-  correctAnswers: { type: Number, default: 0 },
-  totalAttempts: { type: Number, default: 0 },
-  masteryScore: { type: Number, default: 0 }, // 0 to 100
-  lastAccessed: { type: Date, default: Date.now }
-}, { timestamps: true });
-
-// Auto-calculate mastery score before any save/validate
-userTopicProficiencySchema.pre('validate', function () {
-  if (this.totalAttempts > 0) {
-    this.masteryScore = Math.round((this.correctAnswers / this.totalAttempts) * 100);
-  } else {
-    this.masteryScore = 0;
-  }
+const UserTopicProficiency = sequelize.define('UserTopicProficiency', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true,
+  },
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'id',
+    },
+  },
+  topicId: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  topicName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  correctAnswers: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  totalAttempts: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  masteryScore: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  lastAccessed: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+}, {
+  timestamps: true,
+  tableName: 'user_topic_proficiencies',
+  indexes: [
+    {
+      unique: true,
+      fields: ['userId', 'topicName'],
+    },
+  ],
+  hooks: {
+    beforeValidate: (instance) => {
+      if (instance.totalAttempts > 0) {
+        instance.masteryScore = Math.round((instance.correctAnswers / instance.totalAttempts) * 100);
+      } else {
+        instance.masteryScore = 0;
+      }
+    },
+  },
 });
 
-module.exports = mongoose.model('UserTopicProficiency', userTopicProficiencySchema);
+module.exports = UserTopicProficiency;

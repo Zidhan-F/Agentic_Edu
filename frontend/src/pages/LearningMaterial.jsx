@@ -4,7 +4,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { BookOpen, ArrowLeft, Clock, Sparkles, ChevronRight, BrainCircuit, Lightbulb, CheckCircle2, HelpCircle } from 'lucide-react';
 
-const API = 'http://localhost:5000/api';
+import { API } from '../config';
 
 export default function LearningMaterial({ propId, onClose }) {
   const params = useParams();

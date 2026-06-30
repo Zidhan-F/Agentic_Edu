@@ -3,7 +3,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, Send, Sparkles, Brain } from 'lucide-react';
 
-const API = 'http://localhost:5000/api';
+import { API } from '../config';
 
 export default function AiTutorChat({ context }) {
   const [isOpen, setIsOpen] = useState(false);

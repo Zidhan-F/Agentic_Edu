@@ -1,18 +1,57 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const resourceSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  concept_id: { type: String, required: true },
-  content_url: { type: String, default: '#' },
-  level_target: { type: Number, required: true },
-  estimated_minutes: { type: Number, default: 2 },
-  explanation: { type: String, default: '' },
-  keyPoints: [{ type: String }],
-  example: {
-    question: { type: String, default: '' },
-    solution: { type: String, default: '' }
+const Resource = sequelize.define('Resource', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true,
   },
-  tip: { type: String, default: '' }
-}, { timestamps: true });
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
+  },
+  title: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  concept_id: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  content_url: {
+    type: DataTypes.STRING,
+    defaultValue: '#',
+  },
+  level_target: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+  estimated_minutes: {
+    type: DataTypes.INTEGER,
+    defaultValue: 2,
+  },
+  explanation: {
+    type: DataTypes.TEXT,
+    defaultValue: '',
+  },
+  keyPoints: {
+    type: DataTypes.JSONB,
+    defaultValue: [],
+  },
+  example: {
+    type: DataTypes.JSONB,
+    defaultValue: { question: '', solution: '' },
+  },
+  tip: {
+    type: DataTypes.TEXT,
+    defaultValue: '',
+  },
+}, {
+  timestamps: true,
+  tableName: 'resources',
+});
 
-module.exports = mongoose.model('Resource', resourceSchema);
+module.exports = Resource;

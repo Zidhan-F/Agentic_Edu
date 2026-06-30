@@ -1,22 +1,27 @@
-const Question = require('../models/Question');
-const Resource = require('../models/Resource');
+const { Op } = require('sequelize');
+const { Question, Resource } = require('../models');
 
 class RecommenderService {
   static async getRecommendation(questionId, isCorrect) {
     if (isCorrect) return null;
 
     try {
-      const question = await Question.findById(questionId);
+      const question = await Question.findByPk(questionId);
       if (!question) return null;
       
       let recommendedResource = await Resource.findOne({ 
-        concept_id: question.concept_id, 
-        level_target: { $lte: question.difficulty_level } 
-      }).sort({ level_target: -1 });
+        where: {
+          concept_id: question.concept_id, 
+          level_target: { [Op.lte]: question.difficulty_level } 
+        },
+        order: [['level_target', 'DESC']]
+      });
 
       // If not found by level, just get ANY resource for this concept
       if (!recommendedResource) {
-        recommendedResource = await Resource.findOne({ concept_id: question.concept_id });
+        recommendedResource = await Resource.findOne({ 
+          where: { concept_id: question.concept_id } 
+        });
       }
 
       if (!recommendedResource) {

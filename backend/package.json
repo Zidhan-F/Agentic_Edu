@@ -12,12 +12,15 @@
   "type": "commonjs",
   "dependencies": {
     "@google/genai": "^1.50.1",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "google-auth-library": "^10.6.2",
-    "mongoose": "^9.5.0",
     "node-cron": "^4.2.1",
+    "pg": "^8.16.0",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.0",
     "socket.io": "^4.8.3"
   }
 }

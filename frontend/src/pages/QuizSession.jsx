@@ -6,10 +6,9 @@ import {
   Brain, Clock, ChevronRight, CheckCircle2, AlertCircle, 
   ArrowLeft, BarChart3, Target, Sparkles, X, Compass, TrendingUp, Award, Zap
 } from 'lucide-react';
-import { io } from 'socket.io-client';
 import AgentTutorModal from '../components/AgentTutorModal';
 
-const API = 'http://localhost:5000/api';
+import { API, API_URL } from '../config';
 
 const categoryMeta = {
   'Logika Silogisme':      { icon: Brain, color: 'sky', category: 'Penalaran Logis' },
@@ -192,12 +191,17 @@ export default function QuizSession({ user, isAiActive }) {
 
   useEffect(() => {
     if (!questions.length || results || !isAiActive) return;
-    const s = io('http://localhost:5000');
-    s.on('connect', () => s.emit('start_session', { userId: user._id, questionId: questions[idx]._id }));
-    s.on('agent_nudge', d => setNudge(d));
-    const hb = setInterval(() => s.emit('heartbeat'), 10000);
-    return () => { clearInterval(hb); s.disconnect(); };
-  }, [idx, questions, user._id, results, isAiActive]);
+    setNudge(null);
+    
+    const nudgeTimer = setTimeout(() => {
+      setNudge({
+        type: 'HINT',
+        content: 'Sepertinya kamu kesulitan. Coba ingat kembali konsep dasar atau baca materi terkait!'
+      });
+    }, 300000);
+
+    return () => clearTimeout(nudgeTimer);
+  }, [idx, questions, results, isAiActive]);
 
   const handleSubmit = useCallback(async () => {
     if (selected === null) return;

@@ -10,7 +10,7 @@ Agentic Edu is a modern, AI-powered educational platform designed to provide a p
 * **Interactive Dashboards**: Modern interface built with React, Vite, and TailwindCSS for viewing learning progress and topic proficiency.
 * **Adaptive Quizzes & Reviews**: Take quizzes, track historical scores, and review answers with detailed AI insights.
 * **Streak Protection & Engagement Nudges**: Automatic cron jobs and Socket.io triggers to nudge students, maintaining their daily learning streak.
-* **Topic Proficiency Tracking**: Deep integration tracking student progress per topic using MongoDB and Mongoose.
+* **Topic Proficiency Tracking**: Deep integration tracking student progress per topic using PostgreSQL and Sequelize.
 
 ---
 
@@ -23,7 +23,7 @@ Agentic Edu is a modern, AI-powered educational platform designed to provide a p
 
 ### Backend
 * **Core**: Node.js, Express.js
-* **Database**: MongoDB (Mongoose ODM)
+* **Database**: PostgreSQL (Sequelize ORM)
 * **Real-time Communication**: Socket.io
 * **AI/GenAI integration**: `@google/genai` (Gemini)
 * **Automation**: `node-cron` for scheduling streaks
@@ -35,9 +35,9 @@ Agentic Edu is a modern, AI-powered educational platform designed to provide a p
 ```text
 Agentic_Edu/
 ├── backend/            # Express backend API & Socket.io server
-│   ├── config/         # Database configuration
+│   ├── config/         # Database configuration (Sequelize PostgreSQL)
 │   ├── cron/           # Cron jobs (Streak protection, etc.)
-│   ├── models/         # Mongoose schemas (User, Question, QuizHistory, etc.)
+│   ├── models/         # Sequelize models (User, Question, QuizHistory, etc.)
 │   ├── seedContent/    # Seed data generator scripts
 │   ├── services/       # Core business logic & AI recommendation agent services
 │   ├── socket/         # Real-time WebSocket connection handling
@@ -61,7 +61,7 @@ Agentic_Edu/
 
 ### Prerequisites
 * [Node.js](https://nodejs.org/) (v18 or higher recommended)
-* [MongoDB](https://www.mongodb.com/) (running locally or a cloud database instance)
+* [PostgreSQL](https://www.postgresql.org/) (running locally or a cloud database instance)
 * Gemini API Key
 
 ### Backend Setup
@@ -76,14 +76,16 @@ Agentic_Edu/
 3. Configure your environment variables in a `.env` file:
    ```env
    PORT=5000
-   MONGO_URI=mongodb://127.0.0.1:27017/agentic_edu
+   DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/agentic_edu
    GOOGLE_CLIENT_ID=your_google_client_id
    GEMINI_API_KEY=your_gemini_api_key
    ```
 4. Seed database (optional):
+   You can seed the database by running:
    ```bash
-   node seedData.js
+   node addMoreQuestions.js
    ```
+   Or trigger the seed endpoint `POST /api/seed` after running the backend.
 5. Run the server:
    ```bash
    node index.js

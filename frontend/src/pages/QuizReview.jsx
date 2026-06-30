@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, XCircle, Clock, Zap, BookOpen } from 'lucide-react';
 import AiTutorChat from '../components/AiTutorChat';
 
-const API = 'http://localhost:5000/api';
+import { API } from '../config';
 
 export default function QuizReview({ user }) {
   const { id } = useParams();

@@ -1,13 +1,48 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const questionSchema = new mongoose.Schema({
-  content: { type: String, required: true },
-  concept_id: { type: String, required: true },
-  conceptName: { type: String, required: true },
-  difficulty_level: { type: Number, required: true }, // 1 to 5
-  correct_answer: { type: String, required: true },
-  options: [{ type: String }],
-  explanation: { type: String }
-}, { timestamps: true });
+const Question = sequelize.define('Question', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true,
+  },
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
+  },
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+  concept_id: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  conceptName: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  difficulty_level: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+  correct_answer: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  options: {
+    type: DataTypes.JSONB,
+    defaultValue: [],
+  },
+  explanation: {
+    type: DataTypes.TEXT,
+  },
+}, {
+  timestamps: true,
+  tableName: 'questions',
+});
 
-module.exports = mongoose.model('Question', questionSchema);
+module.exports = Question;

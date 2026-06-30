@@ -1,14 +1,55 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  googleId: { type: String, unique: true, sparse: true },
-  picture: { type: String },
-  last_login: { type: Date, default: Date.now },
-  streak: { type: Number, default: 0 },
-  lastQuizDate: { type: Date },
-  badges: [{ type: String }]
-}, { timestamps: true });
+const User = sequelize.define('User', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true,
+  },
+  _id: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.id;
+    }
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  email: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    unique: true,
+  },
+  googleId: {
+    type: DataTypes.STRING,
+    unique: true,
+  },
+  password_hash: {
+    type: DataTypes.STRING,
+  },
+  picture: {
+    type: DataTypes.STRING,
+  },
+  last_login: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+  streak: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  lastQuizDate: {
+    type: DataTypes.DATE,
+  },
+  badges: {
+    type: DataTypes.JSONB,
+    defaultValue: [],
+  },
+}, {
+  timestamps: true,
+  tableName: 'users',
+});
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = User;

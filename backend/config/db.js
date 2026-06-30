@@ -1,13 +1,24 @@
-const mongoose = require('mongoose');
+const { Sequelize } = require('sequelize');
+
+const sequelize = new Sequelize(process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/agentic_edu', {
+  dialect: 'postgres',
+  logging: false,
+  dialectOptions: process.env.NODE_ENV === 'production' ? {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false
+    }
+  } : {}
+});
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/agentic_edu');
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    await sequelize.authenticate();
+    console.log(`PostgreSQL Connected successfully.`);
   } catch (error) {
     console.error(`Error: ${error.message}`);
     process.exit(1);
   }
 };
 
-module.exports = connectDB;
+module.exports = { connectDB, sequelize };

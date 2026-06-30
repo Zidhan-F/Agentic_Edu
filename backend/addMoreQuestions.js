@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-const Question = require('./models/Question');
 require('dotenv').config();
+const { Question, sequelize } = require('./models');
 
 const newQuestions = [
   // LOGICAL REASONING (10)
@@ -66,11 +65,12 @@ const newQuestions = [
 
 async function addData() {
   try {
-    await mongoose.connect('mongodb://127.0.0.1:27017/eduagent');
+    await sequelize.authenticate();
     console.log('Connected to DB');
-    await Question.insertMany(newQuestions);
+    await Question.sync();
+    await Question.bulkCreate(newQuestions);
     console.log(`Successfully added ${newQuestions.length} new questions!`);
-    const count = await Question.countDocuments();
+    const count = await Question.count();
     console.log(`Total questions in DB: ${count}`);
     process.exit(0);
   } catch (err) {

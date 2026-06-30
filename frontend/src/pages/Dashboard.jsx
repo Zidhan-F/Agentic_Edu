@@ -8,7 +8,7 @@ import {
   Clock, Zap
 } from 'lucide-react';
 
-const API = 'http://localhost:5000/api';
+import { API } from '../config';
 
 const categoryColors = {
   'Logical Reasoning': { bg: 'bg-sky-500/10', border: 'border-sky-500/20', text: 'text-sky-400', bar: 'bg-sky-500' },

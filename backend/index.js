@@ -7,20 +7,17 @@ const { GoogleGenAI } = require('@google/genai');
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const { Server } = require('socket.io');
 const { OAuth2Client } = require('google-auth-library');
-const mongoose = require('mongoose');
+const { Op } = require('sequelize');
+const bcrypt = require('bcryptjs');
 
-const connectDB = require('./config/db');
-const { initCronJobs } = require('./cron/streakProtector');
+const { connectDB, sequelize } = require('./config/db');
+const { initCronJobs, checkStreakProtection } = require('./cron/streakProtector');
 const { initSocket } = require('./socket/nudgeHandler');
 
 const PathAgentService = require('./services/PathAgentService');
 const RecommenderService = require('./services/RecommenderService');
 
-const User = require('./models/User');
-const UserTopicProficiency = require('./models/UserTopicProficiency');
-const Question = require('./models/Question');
-const Resource = require('./models/Resource');
-const QuizHistory = require('./models/QuizHistory');
+const { User, UserTopicProficiency, Question, Resource, QuizHistory } = require('./models');
 const { questions, resources } = require('./seedData');
 
 const app = express();
@@ -36,9 +33,15 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize DB and Cron
-connectDB();
-initCronJobs();
-initSocket(io);
+const initDB = async () => {
+  await connectDB();
+  await sequelize.sync();
+};
+initDB();
+if (!process.env.VERCEL) {
+  initCronJobs();
+  initSocket(io);
+}
 
 // ── Routes ────────────────────────────────────────────────────────────
 
@@ -53,7 +56,7 @@ app.post('/api/auth/google', async (req, res) => {
     const { sub: googleId, email, name, picture } = payload;
 
     // Find or create user
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ where: { email } });
     if (user) {
       user.googleId = googleId;
       user.picture = picture;
@@ -76,15 +79,72 @@ app.post('/api/auth/google', async (req, res) => {
   }
 });
 
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Nama, email, dan password wajib diisi' });
+    }
+
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email sudah terdaftar' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    const user = await User.create({
+      name,
+      email,
+      password_hash,
+      streak: 0,
+    });
+
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('Registration Error:', error);
+    res.status(500).json({ error: 'Gagal melakukan registrasi' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email dan password wajib diisi' });
+    }
+
+    const user = await User.findOne({ where: { email } });
+    if (!user || !user.password_hash) {
+      return res.status(401).json({ error: 'Email atau password salah' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Email atau password salah' });
+    }
+
+    user.last_login = new Date();
+    await user.save();
+
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('Login Error:', error);
+    res.status(500).json({ error: 'Gagal melakukan login' });
+  }
+});
+
 app.get('/api/dashboard/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const recommendation = await PathAgentService.calculateNextBestTopic(userId);
-    const user = await User.findById(userId);
-    const proficiencies = await UserTopicProficiency.find({ userId });
+    const userIdInt = parseInt(userId, 10);
+    const recommendation = await PathAgentService.calculateNextBestTopic(userIdInt);
+    const user = await User.findByPk(userIdInt);
+    const proficiencies = await UserTopicProficiency.findAll({ where: { userId: userIdInt } });
 
     // Calculate Percentile (Rank)
-    const allProficiencies = await UserTopicProficiency.find({});
+    const allProficiencies = await UserTopicProficiency.findAll();
     const userAverages = {};
     
     allProficiencies.forEach(p => {
@@ -94,13 +154,17 @@ app.get('/api/dashboard/:userId', async (req, res) => {
     });
 
     const userScores = Object.values(userAverages).map(u => u.total / u.count);
-    const currentUserAvg = userAverages[userId] ? (userAverages[userId].total / userAverages[userId].count) : 0;
+    const currentUserAvg = userAverages[userIdInt] ? (userAverages[userIdInt].total / userAverages[userIdInt].count) : 0;
     
     const countBelow = userScores.filter(s => s < currentUserAvg).length;
     const totalUsers = userScores.length || 1;
     const percentile = Math.max(1, Math.min(99, Math.round(100 - (countBelow / totalUsers * 100))));
 
-    const history = await QuizHistory.find({ userId }).sort({ date: -1 }).limit(10);
+    const history = await QuizHistory.findAll({ 
+      where: { userId: userIdInt }, 
+      order: [['date', 'DESC']], 
+      limit: 10 
+    });
 
     res.json({ recommendation, user, proficiencies, rank: percentile, history });
   } catch (err) {
@@ -111,9 +175,11 @@ app.get('/api/dashboard/:userId', async (req, res) => {
 app.post('/api/answer', async (req, res) => {
   try {
     const { userId, questionId, isCorrect } = req.body;
+    const userIdInt = parseInt(userId, 10);
+    const questionIdInt = parseInt(questionId, 10);
     
     // ── Update Streak Logic ──
-    const user = await User.findById(userId);
+    const user = await User.findByPk(userIdInt);
     if (user) {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -139,11 +205,11 @@ app.post('/api/answer', async (req, res) => {
     }
 
     // 1. Get Recommendation (Agent Tutor logic)
-    const recommendation = await RecommenderService.getRecommendation(questionId, isCorrect);
+    const recommendation = await RecommenderService.getRecommendation(questionIdInt, isCorrect);
     
     // 2. Update Proficiency (Agent Strategist logic)
-    const question = await Question.findById(questionId);
-    if (question && userId) {
+    const question = await Question.findByPk(questionIdInt);
+    if (question && userIdInt) {
       const topicId = question.concept_id.split('_')[0]; // Simple mapping
       const topicNameMapping = {
         'logical': 'Logical Reasoning',
@@ -154,11 +220,13 @@ app.post('/api/answer', async (req, res) => {
       };
       const topicName = topicNameMapping[topicId] || 'Other';
 
-      let proficiency = await UserTopicProficiency.findOne({ userId, topicName });
+      let proficiency = await UserTopicProficiency.findOne({ 
+        where: { userId: userIdInt, topicName } 
+      });
       
       if (!proficiency) {
-        proficiency = new UserTopicProficiency({
-          userId,
+        proficiency = await UserTopicProficiency.create({
+          userId: userIdInt,
           topicId,
           topicName,
           correctAnswers: 0,
@@ -172,7 +240,7 @@ app.post('/api/answer', async (req, res) => {
       
       // Calculate mastery percentage
       proficiency.masteryScore = Math.round((proficiency.correctAnswers / proficiency.totalAttempts) * 100);
-      proficiency.lastAttempt = new Date();
+      proficiency.lastAccessed = new Date();
       
       await proficiency.save();
     }
@@ -187,7 +255,16 @@ app.post('/api/answer', async (req, res) => {
 app.post('/api/quiz-history', async (req, res) => {
   try {
     const { userId, score, total, percentage, estimatedIQ, label, categoryDetails, details } = req.body;
-    const history = await QuizHistory.create({ userId, score, total, percentage, estimatedIQ, label, categoryDetails, details });
+    const history = await QuizHistory.create({ 
+      userId: parseInt(userId, 10), 
+      score, 
+      total, 
+      percentage, 
+      estimatedIQ, 
+      label, 
+      categoryDetails, 
+      details 
+    });
     res.json({ success: true, history });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -196,7 +273,10 @@ app.post('/api/quiz-history', async (req, res) => {
 
 app.get('/api/questions', async (req, res) => {
   try {
-    const randomQuestions = await Question.aggregate([{ $sample: { size: 20 } }]);
+    const randomQuestions = await Question.findAll({
+      order: sequelize.random(),
+      limit: 20
+    });
     res.json(randomQuestions);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -206,28 +286,30 @@ app.get('/api/questions', async (req, res) => {
 app.get('/api/questions/adaptive', async (req, res) => {
   try {
     const { difficulty, excludeIds } = req.query;
-    let query = {};
+    let where = {};
     if (excludeIds) {
       const ids = excludeIds.split(',')
-        .filter(id => id.length === 24)
-        .map(id => new mongoose.Types.ObjectId(id));
+        .map(id => parseInt(id.trim(), 10))
+        .filter(id => !isNaN(id));
       if (ids.length > 0) {
-        query._id = { $nin: ids };
+        where.id = { [Op.notIn]: ids };
       }
     }
     
     let targetDiff = parseInt(difficulty) || 3;
     
-    let questions = await Question.aggregate([
-      { $match: { ...query, difficulty_level: targetDiff } },
-      { $sample: { size: 1 } }
-    ]);
+    let questions = await Question.findAll({
+      where: { ...where, difficulty_level: targetDiff },
+      order: sequelize.random(),
+      limit: 1
+    });
     
     if (questions.length === 0) {
-      questions = await Question.aggregate([
-        { $match: query },
-        { $sample: { size: 1 } }
-      ]);
+      questions = await Question.findAll({
+        where: where,
+        order: sequelize.random(),
+        limit: 1
+      });
     }
     
     res.json(questions[0] || null);
@@ -238,7 +320,7 @@ app.get('/api/questions/adaptive', async (req, res) => {
 
 app.get('/api/quiz-history/:id', async (req, res) => {
   try {
-    const history = await QuizHistory.findById(req.params.id);
+    const history = await QuizHistory.findByPk(parseInt(req.params.id, 10));
     if (!history) return res.status(404).json({ error: 'History not found' });
     res.json(history);
   } catch (err) {
@@ -268,7 +350,7 @@ Tugas Anda adalah membantu pengguna memahami mengapa mereka salah menjawab perta
 - Jawaban Benar: ${context.correctAnswer}
 - Jawaban Pengguna (Salah): ${context.selectedAnswer}
 - Penjelasan Asli Singkat: ${context.explanation}
-
+ 
 Pesan Pengguna: "${message}"`;
     }
 
@@ -289,7 +371,7 @@ Pesan Pengguna: "${message}"`;
 app.get('/api/resources/:conceptId', async (req, res) => {
   try {
     const { conceptId } = req.params;
-    let resource = await Resource.findOne({ concept_id: conceptId });
+    let resource = await Resource.findOne({ where: { concept_id: conceptId } });
     if (!resource) {
       resource = {
         title: 'Materi Pengayaan',
@@ -315,10 +397,8 @@ app.get('/api/resources/:conceptId', async (req, res) => {
 
 app.post('/api/seed', async (req, res) => {
   try {
-    await User.deleteMany({});
-    await UserTopicProficiency.deleteMany({});
-    await Question.deleteMany({});
-    await Resource.deleteMany({});
+    // Drop and re-create all tables
+    await sequelize.sync({ force: true });
 
     const user = await User.create({
       name: 'Zidhan',
@@ -326,29 +406,44 @@ app.post('/api/seed', async (req, res) => {
       streak: 12
     });
 
-    await UserTopicProficiency.create([
-      { userId: user._id, topicId: 'logical', topicName: 'Logical Reasoning', correctAnswers: 3, totalAttempts: 10 },
-      { userId: user._id, topicId: 'numerical', topicName: 'Numerical Ability', correctAnswers: 7, totalAttempts: 10 },
-      { userId: user._id, topicId: 'verbal', topicName: 'Verbal Intelligence', correctAnswers: 9, totalAttempts: 10 },
-      { userId: user._id, topicId: 'spatial', topicName: 'Spatial Reasoning', correctAnswers: 5, totalAttempts: 10 },
-      { userId: user._id, topicId: 'pattern', topicName: 'Pattern Recognition', correctAnswers: 8, totalAttempts: 10 }
-    ]);
+    await UserTopicProficiency.bulkCreate([
+      { userId: user.id, topicId: 'logical', topicName: 'Logical Reasoning', correctAnswers: 3, totalAttempts: 10 },
+      { userId: user.id, topicId: 'numerical', topicName: 'Numerical Ability', correctAnswers: 7, totalAttempts: 10 },
+      { userId: user.id, topicId: 'verbal', topicName: 'Verbal Intelligence', correctAnswers: 9, totalAttempts: 10 },
+      { userId: user.id, topicId: 'spatial', topicName: 'Spatial Reasoning', correctAnswers: 5, totalAttempts: 10 },
+      { userId: user.id, topicId: 'pattern', topicName: 'Pattern Recognition', correctAnswers: 8, totalAttempts: 10 }
+    ], { individualHooks: true });
 
     // ── IQ Test Questions & Resources (50 questions across 5 categories) ───────
     const questionsWithExplanations = questions.map(q => ({
       ...q,
       explanation: `Jawaban yang benar adalah ${q.correct_answer}. Evaluasi logika Anda berdasarkan konsep ${q.conceptName}.`
     }));
-    await Question.insertMany(questionsWithExplanations);
-    await Resource.insertMany(resources);
+    await Question.bulkCreate(questionsWithExplanations);
+    await Resource.bulkCreate(resources);
 
-    res.json({ message: 'Database seeded!', userId: user._id });
+    res.json({ message: 'Database seeded!', userId: user.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.get('/api/cron/streak-protector', async (req, res) => {
+  try {
+    console.log("Streak protector endpoint triggered.");
+    const users = await checkStreakProtection();
+    res.json({ success: true, message: `Checked streak protection. ${users.length} users processed.` });
+  } catch (err) {
+    console.error("Streak protector API error:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
+
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
+  const PORT = process.env.PORT || 5000;
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
