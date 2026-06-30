@@ -1,11 +1,13 @@
 {
   "services": {
     "frontend": {
-      "root": "frontend"
+      "root": "frontend",
+      "routePrefix": "/"
     },
     "backend": {
       "root": "backend",
-      "entrypoint": "index.js"
+      "entrypoint": "index.js",
+      "routePrefix": "/api"
     }
   }
 }
